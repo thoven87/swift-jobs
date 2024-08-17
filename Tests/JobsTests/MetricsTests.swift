@@ -245,13 +245,11 @@ final class MetricsTests: XCTestCase {
         let counter = try XCTUnwrap(Self.testMetrics.counters.withLockedValue { $0 }["swift_jobs"] as? TestCounter)
         XCTAssertEqual(counter.values.withLockedValue { $0 }[0].1, 1)
         XCTAssertEqual(counter.values.withLockedValue { $0 }.count, 1) // This technically 5, need to figueout how to await the results to get 5
-        XCTAssertEqual(counter.dimensions.count, 3)
+        XCTAssertEqual(counter.dimensions.count, 2)
         XCTAssertEqual(counter.dimensions[0].0, "name")
         XCTAssertEqual(counter.dimensions[0].1, "testBasic")
         XCTAssertEqual(counter.dimensions[1].0, "status")
         XCTAssertEqual(counter.dimensions[1].1, "succeeded")
-        XCTAssertEqual(counter.dimensions[2].0, "id")
-        XCTAssertNotNil(counter.dimensions[2].1)
     }
 
     func testFailedJobs() async throws {

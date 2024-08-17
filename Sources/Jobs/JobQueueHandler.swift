@@ -70,10 +70,9 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
         let startTime = DispatchTime.now().uptimeNanoseconds
         logger[metadataKey: "JobID"] = .stringConvertible(queuedJob.id)
         let job: any Job
-        let jobId: String = "\(queuedJob.id)"
         do {
             job = try self.jobRegistry.decode(queuedJob.jobBuffer)
-            Counter(label: self.metricsLabel, dimensions: [("name", job.name), ("status", JobStatus.queued.rawValue), ("id", jobId)]).increment()
+            Counter(label: self.metricsLabel, dimensions: [("name", job.name), ("status", JobStatus.queued.rawValue)]).increment()
         } catch let error as JobQueueError where error == .unrecognisedJobId {
             logger.debug("Failed to find Job with ID while decoding")
             try await self.queue.failed(jobId: queuedJob.id, error: error)
@@ -91,7 +90,7 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
         do {
             while true {
                 do {
-                    Counter(label: self.metricsLabel, dimensions: [("name", job.name), ("status", JobStatus.running.rawValue), ("id", jobId)]).increment()
+                    Counter(label: self.metricsLabel, dimensions: [("name", job.name), ("status", JobStatus.processing.rawValue)]).increment()
                     try await job.execute(context: .init(logger: logger))
                     break
                 } catch let error as CancellationError {
@@ -100,29 +99,29 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
                     // job queue driver, the process of failing the job might not occur because itself
                     // might get cancelled
                     try await self.queue.failed(jobId: queuedJob.id, error: error)
-                    self.updateJobMetrics(for: job.name, id: jobId ,startTime: startTime, error: error)
+                    self.updateJobMetrics(for: job.name, startTime: startTime, error: error)
                     return
                 } catch {
                     if count <= 0 {
                         logger.debug("Job failed")
                         try await self.queue.failed(jobId: queuedJob.id, error: error)
-                        self.updateJobMetrics(for: job.name, id: jobId, startTime: startTime, error: error)
+                        self.updateJobMetrics(for: job.name, startTime: startTime, error: error)
                         return
                     }
                     count -= 1
                     logger.debug("Retrying Job")
                     Counter(
                         label: "\(self.metricsLabel)_retried_counter",
-                        dimensions: [("name", job.name), ("status", JobStatus.retried.rawValue), ("id", "\(queuedJob.id)")]
+                        dimensions: [("name", job.name), ("status", JobStatus.retried.rawValue)]
                     ).increment()
                 }
             }
             logger.debug("Finished Job")
-            self.updateJobMetrics(for: job.name, id: jobId, startTime: startTime)
+            self.updateJobMetrics(for: job.name, startTime: startTime)
             try await self.queue.finished(jobId: queuedJob.id)
         } catch {
             logger.debug("Failed to set job status")
-            self.updateJobMetrics(for: job.name, id: jobId, startTime: startTime, error: error)
+            self.updateJobMetrics(for: job.name, startTime: startTime, error: error)
         }
     }
 
@@ -139,7 +138,7 @@ extension JobQueueHandler: CustomStringConvertible {
     /// Used for the histogram which can be useful to see by job status
     private enum JobStatus: String, Codable, Sendable {
         case queued
-        case running
+        case processing
         case retried
         case cancelled
         case failed
@@ -148,7 +147,6 @@ extension JobQueueHandler: CustomStringConvertible {
 
     private func updateJobMetrics(
         for name: String,
-        id: String,
         startTime: UInt64,
         error: Error? = nil
     ) {
@@ -167,8 +165,7 @@ extension JobQueueHandler: CustomStringConvertible {
             label: "\(self.metricsLabel)_duration_seconds",
             dimensions: [
                 ("name", name),
-                ("status", jobStatus.rawValue),
-                ("id", id)
+                ("status", jobStatus.rawValue)
             ],
             preferredDisplayUnit: .seconds
         ).recordNanoseconds(DispatchTime.now().uptimeNanoseconds - startTime)
@@ -178,18 +175,18 @@ extension JobQueueHandler: CustomStringConvertible {
             if error is CancellationError {
                 Counter(
                     label: self.metricsLabel,
-                    dimensions: [("name", name), ("status", jobStatus.rawValue), ("id", id)]
+                    dimensions: [("name", name), ("status", jobStatus.rawValue)]
                 ).increment()
             } else {
                 Counter(
                     label: self.metricsLabel,
-                    dimensions: [("name", name), ("status", jobStatus.rawValue), ("id", id)]
+                    dimensions: [("name", name), ("status", jobStatus.rawValue)]
                 ).increment()
             }
         } else {
             Counter(
                 label: self.metricsLabel,
-                dimensions: [("name", name), ("status", jobStatus.rawValue), ("id", id)]
+                dimensions: [("name", name), ("status", jobStatus.rawValue)]
             ).increment()
         }
     }
