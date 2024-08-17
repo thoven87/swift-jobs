@@ -25,6 +25,7 @@ final class TestMetrics: MetricsFactory {
     let counters = NIOLockedValueBox([String: CounterHandler]())
     let recorders = NIOLockedValueBox([String: RecorderHandler]())
     let timers = NIOLockedValueBox([String: TimerHandler]())
+    let meters = NIOLockedValueBox([String: MeterHandler]())
 
     public func makeCounter(label: String, dimensions: [(String, String)]) -> CounterHandler {
         self.counters.withLockedValue { counters in
@@ -44,6 +45,12 @@ final class TestMetrics: MetricsFactory {
     public func makeTimer(label: String, dimensions: [(String, String)]) -> TimerHandler {
         self.timers.withLockedValue { timers in
             self.make(label: label, dimensions: dimensions, registry: &timers, maker: TestTimer.init)
+        }
+    }
+    
+    public func makeMeter(label: String, dimensions: [(String, String)]) -> MeterHandler {
+        self.meters.withLockedValue { meters in
+            self.make(label: label, dimensions: dimensions, registry: &meters, maker: TestMeter.init)
         }
     }
 
@@ -76,6 +83,14 @@ final class TestMetrics: MetricsFactory {
             }
         }
     }
+    
+    func destroyMeter(_ handler: MeterHandler) {
+        if let testMeter = handler as? TestMeter {
+            _ = self.meters.withLockedValue { meters in
+                meters.removeValue(forKey: testMeter.label)
+            }
+        }
+    }
 }
 
 internal final class TestCounter: CounterHandler, Equatable {
@@ -105,6 +120,50 @@ internal final class TestCounter: CounterHandler, Equatable {
     }
 
     public static func == (lhs: TestCounter, rhs: TestCounter) -> Bool {
+        return lhs.id == rhs.id
+    }
+}
+
+internal final class TestMeter: MeterHandler, Equatable {
+    
+    let id: String
+    let label: String
+    let dimensions: [(String, String)]
+    let values = NIOLockedValueBox([(Date, Double)]())
+    
+    init(label: String, dimensions: [(String, String)]) {
+        self.id = NSUUID().uuidString
+        self.label = label
+        self.dimensions = dimensions
+    }
+    
+    func set(_ value: Int64) {
+        self.values.withLockedValue { values in
+            values.append((Date(), Double(value)))
+        }
+    }
+    
+    func set(_ value: Double) {
+        self.values.withLockedValue { values in
+            values.append((Date(), value))
+        }
+    }
+    
+    func increment(by: Double) {
+        self.values.withLockedValue { values in
+            let last = values.last ?? (Date(), 0)
+            values.append((Date(), last.1 + by))
+        }
+    }
+    
+    func decrement(by: Double) {
+        self.values.withLockedValue { values in
+            let last = values.last ?? (Date(), 1)
+            values.append((Date(), last.1 - by))
+        }
+    }
+    
+    public static func == (lhs: TestMeter, rhs: TestMeter) -> Bool {
         return lhs.id == rhs.id
     }
 }
@@ -281,9 +340,9 @@ final class MetricsTests: XCTestCase {
         XCTAssertEqual(counter.dimensions[1].0, "status")
         XCTAssertEqual(counter.dimensions[1].1, "failed")
         
-        let retryCounter = try XCTUnwrap(Self.testMetrics.counters.withLockedValue { $0 }["swift_jobs_retried_counter"] as? TestCounter)
+        let retryCounter = try XCTUnwrap(Self.testMetrics.meters.withLockedValue { $0 }["swift_jobs"] as? TestMeter)
         XCTAssertEqual(retryCounter.values.withLockedValue { $0 }.count, 1)
-        XCTAssertEqual(retryCounter.values.withLockedValue { $0 }[0].1, 1)
+        XCTAssertEqual(retryCounter.values.withLockedValue { $0 }[0].1, 0)
         XCTAssertEqual(retryCounter.dimensions[0].0, "name")
         XCTAssertEqual(retryCounter.dimensions[0].1, "testFailedJobs()")
         let timer = try XCTUnwrap(Self.testMetrics.timers.withLockedValue { $0 }["swift_jobs_duration_seconds"] as? TestTimer)

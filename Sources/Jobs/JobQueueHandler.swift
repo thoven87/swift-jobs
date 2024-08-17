@@ -72,7 +72,6 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
         let job: any Job
         do {
             job = try self.jobRegistry.decode(queuedJob.jobBuffer)
-            Counter(label: self.metricsLabel, dimensions: [("name", job.name), ("status", JobStatus.queued.rawValue)]).increment()
         } catch let error as JobQueueError where error == .unrecognisedJobId {
             logger.debug("Failed to find Job with ID while decoding")
             try await self.queue.failed(jobId: queuedJob.id, error: error)
@@ -90,7 +89,7 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
         do {
             while true {
                 do {
-                    Counter(label: self.metricsLabel, dimensions: [("name", job.name), ("status", JobStatus.processing.rawValue)]).increment()
+                    Meter(label: self.metricsLabel, dimensions: [("name", job.name), ("status", JobStatus.processing.rawValue)]).increment()
                     try await job.execute(context: .init(logger: logger))
                     break
                 } catch let error as CancellationError {
@@ -110,8 +109,8 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
                     }
                     count -= 1
                     logger.debug("Retrying Job")
-                    Counter(
-                        label: "\(self.metricsLabel)_retried_counter",
+                    Meter(
+                        label: self.metricsLabel,
                         dimensions: [("name", job.name), ("status", JobStatus.retried.rawValue)]
                     ).increment()
                 }
@@ -159,14 +158,16 @@ extension JobQueueHandler: CustomStringConvertible {
         } else {
             .succeeded
         }
+        
+        let dimensions: [(String, String)] = [
+            ("name", name),
+            ("status", jobStatus.rawValue)
+        ]
 
         // Calculate job execution time
         Timer(
             label: "\(self.metricsLabel)_duration_seconds",
-            dimensions: [
-                ("name", name),
-                ("status", jobStatus.rawValue)
-            ],
+            dimensions: dimensions,
             preferredDisplayUnit: .seconds
         ).recordNanoseconds(DispatchTime.now().uptimeNanoseconds - startTime)
 
@@ -175,19 +176,23 @@ extension JobQueueHandler: CustomStringConvertible {
             if error is CancellationError {
                 Counter(
                     label: self.metricsLabel,
-                    dimensions: [("name", name), ("status", jobStatus.rawValue)]
+                    dimensions: dimensions
                 ).increment()
             } else {
                 Counter(
                     label: self.metricsLabel,
-                    dimensions: [("name", name), ("status", jobStatus.rawValue)]
+                    dimensions: dimensions
                 ).increment()
             }
         } else {
             Counter(
                 label: self.metricsLabel,
-                dimensions: [("name", name), ("status", jobStatus.rawValue)]
+                dimensions: dimensions
             ).increment()
         }
+        // clean up meters
+        Meter(label: self.metricsLabel, dimensions: [("name", name), ("status", JobStatus.queued.rawValue)]).decrement()
+        Meter(label: self.metricsLabel, dimensions: [("name", name), ("status", JobStatus.processing.rawValue)]).decrement()
+        Meter(label: self.metricsLabel, dimensions: [("name", name), ("status", JobStatus.retried.rawValue)]).decrement()
     }
 }
