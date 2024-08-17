@@ -74,7 +74,7 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
             // Job name is not available here :(
             // TODO: update QueueJob name make sure the name of the job is
             // always available
-            Gauge(label: self.metricsLabel, dimensions: [("job_id", "\(queuedJob.id)"), ("job_status", "\(JobStatus.pending.rawValue)")]).record(Double(1))
+            Gauge(label: self.metricsLabel, dimensions: [("job_id", "\(queuedJob.id)"), ("job_status", "\(JobStatus.queued.rawValue)")]).record(Double(1))
             job = try self.jobRegistry.decode(queuedJob.jobBuffer)
         } catch let error as JobQueueError where error == .unrecognisedJobId {
             logger.debug("Failed to find Job with ID while decoding")
@@ -93,7 +93,7 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
         do {
             while true {
                 do {
-                    Gauge(label: self.metricsLabel, dimensions: [("job_name", job.name), ("job_status", "\(JobStatus.running.rawValue)")]).record(Double(1))
+                    Gauge(label: self.metricsLabel, dimensions: [("job_name", job.name), ("job_status", "\(JobStatus.running.rawValue)"), ("job_id", "\(queuedJob.id)")]).record(Double(1))
                     try await job.execute(context: .init(logger: logger))
                     break
                 } catch let error as CancellationError {
@@ -141,7 +141,7 @@ extension JobQueueHandler: CustomStringConvertible {
 
     /// Used for the histogram which can be useful to see by job status
     private enum JobStatus: String, Codable, Sendable {
-        case pending
+        case queued
         case running
         case retrying
         case cancelled
