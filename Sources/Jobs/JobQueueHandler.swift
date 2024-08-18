@@ -24,7 +24,6 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
         self.numWorkers = numWorkers
         self.logger = logger
         self.jobRegistry = .init()
-        Gauge(label: "\(self.metricsLabel)_worker_count").record(Double(numWorkers))
     }
 
     ///  Register job
@@ -75,10 +74,12 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
         } catch let error as JobQueueError where error == .unrecognisedJobId {
             logger.debug("Failed to find Job with ID while decoding")
             try await self.queue.failed(jobId: queuedJob.id, error: error)
+            self.updateJobMeters()
             return
         } catch {
             logger.debug("Job failed to decode")
             try await self.queue.failed(jobId: queuedJob.id, error: JobQueueError.decodeJobFailed)
+            self.updateJobMeters()
             return
         }
         logger[metadataKey: "JobName"] = .string(job.name)
@@ -116,8 +117,8 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
                 }
             }
             logger.debug("Finished Job")
-            self.updateJobMetrics(for: job.name, startTime: startTime)
             try await self.queue.finished(jobId: queuedJob.id)
+            self.updateJobMetrics(for: job.name, startTime: startTime)
         } catch {
             logger.debug("Failed to set job status")
             self.updateJobMetrics(for: job.name, startTime: startTime, error: error)
@@ -190,6 +191,10 @@ extension JobQueueHandler: CustomStringConvertible {
                 dimensions: dimensions
             ).increment()
         }
+        self.updateJobMeters()
+    }
+    
+    private func updateJobMeters() {
         // clean up meters
         Meter(label: self.metricsLabel, dimensions: [("status", JobStatus.queued.rawValue)]).decrement()
         Meter(label: self.metricsLabel, dimensions: [("status", JobStatus.processing.rawValue)]).decrement()
