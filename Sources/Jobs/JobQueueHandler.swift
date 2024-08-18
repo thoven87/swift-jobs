@@ -191,8 +191,8 @@ extension JobQueueHandler: CustomStringConvertible {
             ).increment()
         }
         // clean up meters
-        Meter(label: self.metricsLabel, dimensions: [("name", name), ("status", JobStatus.queued.rawValue)]).decrement()
-        Meter(label: self.metricsLabel, dimensions: [("name", name), ("status", JobStatus.processing.rawValue)]).decrement()
-        Meter(label: self.metricsLabel, dimensions: [("name", name), ("status", JobStatus.retried.rawValue)]).decrement()
+        Meter(label: self.metricsLabel, dimensions: [("status", JobStatus.queued.rawValue)]).decrement()
+        Meter(label: self.metricsLabel, dimensions: [("status", JobStatus.processing.rawValue)]).decrement()
+        Meter(label: self.metricsLabel, dimensions: [("status", JobStatus.retried.rawValue)]).decrement()
     }
 }
