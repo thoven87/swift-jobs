@@ -110,9 +110,9 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
                     }
                     count -= 1
                     logger.debug("Retrying Job")
-                    Meter(
-                        label: self.meterLabel,
-                        dimensions: [("status", JobStatus.retried.rawValue)]
+                    Counter(
+                        label: self.metricsLabel,
+                        dimensions: [("name", job.name), ("status", JobStatus.retried.rawValue)]
                     ).increment()
                 }
             }
@@ -174,24 +174,11 @@ extension JobQueueHandler: CustomStringConvertible {
         ).recordNanoseconds(DispatchTime.now().uptimeNanoseconds - startTime)
 
         // Increment job counter base on status
-        if let error {
-            if error is CancellationError {
-                Counter(
-                    label: self.metricsLabel,
-                    dimensions: dimensions
-                ).increment()
-            } else {
-                Counter(
-                    label: self.metricsLabel,
-                    dimensions: dimensions
-                ).increment()
-            }
-        } else {
-            Counter(
-                label: self.metricsLabel,
-                dimensions: dimensions
-            ).increment()
-        }
+        Counter(
+            label: self.metricsLabel,
+            dimensions: dimensions
+        ).increment()
+        
         self.updateJobMeters()
     }
     
@@ -199,6 +186,5 @@ extension JobQueueHandler: CustomStringConvertible {
         // clean up meters
         Meter(label: self.meterLabel, dimensions: [("status", JobStatus.queued.rawValue)]).decrement()
         Meter(label: self.meterLabel, dimensions: [("status", JobStatus.processing.rawValue)]).decrement()
-        Meter(label: self.meterLabel, dimensions: [("status", JobStatus.retried.rawValue)]).decrement()
     }
 }

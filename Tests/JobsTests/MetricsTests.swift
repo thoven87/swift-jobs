@@ -347,7 +347,7 @@ final class MetricsTests: XCTestCase {
         XCTAssertEqual(retryMeter.values.withLockedValue { $0 }.count, 1)
         XCTAssertEqual(retryMeter.values.withLockedValue { $0 }[0].1, 0)
         XCTAssertEqual(retryMeter.dimensions[0].0, "status")
-        XCTAssertEqual(retryMeter.dimensions[0].1, "retried")
+        XCTAssertEqual(retryMeter.dimensions[0].1, "processing")
         let timer = try XCTUnwrap(Self.testMetrics.timers.withLockedValue { $0 }["swift_jobs_duration_seconds"] as? TestTimer)
         XCTAssertEqual(timer.dimensions[1].0, "status")
         XCTAssertEqual(timer.dimensions[1].1, "failed")
