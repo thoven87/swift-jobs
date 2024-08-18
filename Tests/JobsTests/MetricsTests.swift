@@ -309,6 +309,9 @@ final class MetricsTests: XCTestCase {
         XCTAssertEqual(counter.dimensions[0].1, "testBasic")
         XCTAssertEqual(counter.dimensions[1].0, "status")
         XCTAssertEqual(counter.dimensions[1].1, "succeeded")
+        
+        let queuedMeter = try XCTUnwrap(Self.testMetrics.meters.withLockedValue { $0 }["swift_jobs_meter"] as? TestMeter)
+        XCTAssertEqual(queuedMeter.values.withLockedValue { $0 }.count, 1)
     }
 
     func testFailedJobs() async throws {
@@ -340,11 +343,11 @@ final class MetricsTests: XCTestCase {
         XCTAssertEqual(counter.dimensions[1].0, "status")
         XCTAssertEqual(counter.dimensions[1].1, "failed")
         
-        let retryCounter = try XCTUnwrap(Self.testMetrics.meters.withLockedValue { $0 }["swift_jobs"] as? TestMeter)
-        XCTAssertEqual(retryCounter.values.withLockedValue { $0 }.count, 1)
-        XCTAssertEqual(retryCounter.values.withLockedValue { $0 }[0].1, 0)
-        XCTAssertEqual(retryCounter.dimensions[0].0, "status")
-        XCTAssertEqual(retryCounter.dimensions[0].1, "retried")
+        let retryMeter = try XCTUnwrap(Self.testMetrics.meters.withLockedValue { $0 }["swift_jobs_meter"] as? TestMeter)
+        XCTAssertEqual(retryMeter.values.withLockedValue { $0 }.count, 1)
+        XCTAssertEqual(retryMeter.values.withLockedValue { $0 }[0].1, 0)
+        XCTAssertEqual(retryMeter.dimensions[0].0, "status")
+        XCTAssertEqual(retryMeter.dimensions[0].1, "retried")
         let timer = try XCTUnwrap(Self.testMetrics.timers.withLockedValue { $0 }["swift_jobs_duration_seconds"] as? TestTimer)
         XCTAssertEqual(timer.dimensions[1].0, "status")
         XCTAssertEqual(timer.dimensions[1].1, "failed")

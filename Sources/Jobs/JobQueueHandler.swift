@@ -90,7 +90,7 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
         do {
             while true {
                 do {
-                    Meter(label: self.metricsLabel, dimensions: [("name", job.name), ("status", JobStatus.processing.rawValue)]).increment()
+                    Meter(label: self.meterLabel, dimensions: [("status", JobStatus.processing.rawValue)]).increment()
                     try await job.execute(context: .init(logger: logger))
                     break
                 } catch let error as CancellationError {
@@ -111,8 +111,8 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
                     count -= 1
                     logger.debug("Retrying Job")
                     Meter(
-                        label: self.metricsLabel,
-                        dimensions: [("name", job.name), ("status", JobStatus.retried.rawValue)]
+                        label: self.meterLabel,
+                        dimensions: [("status", JobStatus.retried.rawValue)]
                     ).increment()
                 }
             }
@@ -134,6 +134,7 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
 extension JobQueueHandler: CustomStringConvertible {
     public var description: String { "JobQueueHandler<\(String(describing: Queue.self))>" }
     private var metricsLabel: String { "swift_jobs" }
+    private var meterLabel: String { "swift_jobs_meter" }
 
     /// Used for the histogram which can be useful to see by job status
     private enum JobStatus: String, Codable, Sendable {
@@ -196,8 +197,8 @@ extension JobQueueHandler: CustomStringConvertible {
     
     private func updateJobMeters() {
         // clean up meters
-        Meter(label: self.metricsLabel, dimensions: [("status", JobStatus.queued.rawValue)]).decrement()
-        Meter(label: self.metricsLabel, dimensions: [("status", JobStatus.processing.rawValue)]).decrement()
-        Meter(label: self.metricsLabel, dimensions: [("status", JobStatus.retried.rawValue)]).decrement()
+        Meter(label: self.meterLabel, dimensions: [("status", JobStatus.queued.rawValue)]).decrement()
+        Meter(label: self.meterLabel, dimensions: [("status", JobStatus.processing.rawValue)]).decrement()
+        Meter(label: self.meterLabel, dimensions: [("status", JobStatus.retried.rawValue)]).decrement()
     }
 }
