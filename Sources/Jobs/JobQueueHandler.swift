@@ -110,10 +110,7 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Service {
                     }
                     count -= 1
                     logger.debug("Retrying Job")
-                    Counter(
-                        label: self.metricsLabel,
-                        dimensions: [("name", job.name), ("status", JobStatus.retried.rawValue)]
-                    ).increment()
+                    self.updateJobMetrics(for: job.name, startTime: startTime, retrying: true)
                 }
             }
             logger.debug("Finished Job")
@@ -149,8 +146,19 @@ extension JobQueueHandler: CustomStringConvertible {
     private func updateJobMetrics(
         for name: String,
         startTime: UInt64,
-        error: Error? = nil
+        error: Error? = nil,
+        retrying: Bool = false
     ) {
+        
+        if retrying {
+            self.updateJobMeters()
+            Counter(
+                label: self.metricsLabel,
+                dimensions: [("name", name), ("status", JobStatus.retried.rawValue)]
+            ).increment()
+            return
+        }
+        
         let jobStatus: JobStatus = if let error {
             if error is CancellationError {
                 .cancelled
