@@ -93,6 +93,7 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Sendable {
         let jobQueuedDuration = Date.now.timeIntervalSince(job.queuedAt)
         Timer(
             label: "\(self.metricsLabel)_queued_for_duration_seconds",
+            dimensions: [("jobName", job.name)],
             preferredDisplayUnit: .seconds
         ).recordSeconds(jobQueuedDuration)
 
