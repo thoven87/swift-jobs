@@ -12,6 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Metrics
+
 /// Defines job parameters and identifier
 public protocol JobParameters: Codable, Sendable {
     /// Job type name
@@ -37,7 +39,13 @@ extension JobQueue {
     ///   - options: JobOptions
     /// - Returns: Identifier of queued job
     @discardableResult public func push<Parameters: JobParameters>(_ parameters: Parameters, options: JobOptions = .init()) async throws -> Queue.JobID {
-        return try await self.push(id: Parameters.jobID, parameters: parameters, options: options)
+        Meter(label: JobMetricsHelper.meterLabel, dimensions: [
+            ("status", JobMetricsHelper.JobStatus.queued.rawValue),
+            ("name", type(of: parameters).jobName),
+        ]).increment()
+        let jobID = try await self.push(id: Parameters.jobID, parameters: parameters, options: options)
+        
+        return jobID
     }
 
     ///  Register job type

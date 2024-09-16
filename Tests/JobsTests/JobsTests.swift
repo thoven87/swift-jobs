@@ -60,8 +60,8 @@ final class JobsTests: XCTestCase {
             expectation.fulfill()
         }
         jobQueue.registerJob(job)
-        jobQueue.registerJob(id: .test) { _, _ in
-        }
+//        jobQueue.registerJob(id: .test) { _, _ in
+//        }
         try await self.testJobQueue(jobQueue) {
             try await jobQueue.push(id: job.id, parameters: 1)
             try await jobQueue.push(id: job.id, parameters: 2)
