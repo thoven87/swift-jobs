@@ -68,6 +68,26 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Sendable {
         var logger = logger
         let startTime = DispatchTime.now().uptimeNanoseconds
         logger[metadataKey: "JobID"] = .stringConvertible(queuedJob.id)
+        // Decrement the current job by 1
+        Meter(label: JobMetricsHelper.meterLabel, dimensions: [
+            ("status", JobMetricsHelper.JobStatus.queued.rawValue),
+            ("jobID", queuedJob.id.description),
+        ]).decrement()
+        // Processing start here
+        Meter(label: JobMetricsHelper.meterLabel, dimensions: [
+            ("status", JobMetricsHelper.JobStatus.processing.rawValue),
+            ("jobID", queuedJob.id.description),
+        ]).increment()
+        
+        defer {
+            // We can decrement processing jobs here because this func called
+            // on complete, failed e.t.c
+            Meter(label: JobMetricsHelper.meterLabel, dimensions: [
+                ("status", JobMetricsHelper.JobStatus.processing.rawValue),
+                ("jobID", queuedJob.id.description),
+            ]).decrement()
+        }
+        
         let job: any JobInstanceProtocol
         do {
             job = try self.jobRegistry.decode(queuedJob.jobBuffer)
@@ -89,18 +109,6 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Sendable {
             return
         }
         logger[metadataKey: "JobName"] = .string(job.name)
-        
-        // Decrement the current job by 1
-        Meter(label: JobMetricsHelper.meterLabel, dimensions: [
-            ("status", JobMetricsHelper.JobStatus.queued.rawValue),
-            ("name", job.name),
-        ]).decrement()
-        
-        // Processing start here
-        Meter(label: JobMetricsHelper.meterLabel, dimensions: [
-            ("status", JobMetricsHelper.JobStatus.processing.rawValue),
-            ("name", job.name),
-        ]).increment()
 
         // Calculate wait time from queued to processing
         let jobQueuedDuration = Date.now.timeIntervalSince(job.queuedAt)
@@ -138,12 +146,20 @@ final class JobQueueHandler<Queue: JobQueueDriver>: Sendable {
                 // remove from processing lists
                 try await self.queue.finished(jobId: queuedJob.id)
                 // push new job in the queue
-                _ = try await self.queue.push(
+                let newJobId = try await self.queue.push(
                     self.queue.encode(job, attempts: attempts),
                     options: .init(
                         delayUntil: delay
                     )
                 )
+                
+                // Guard against negative queue values, this is needed because we call
+                // the job queue directly in the retrying step
+                Meter(label: JobMetricsHelper.meterLabel, dimensions: [
+                    ("status", JobMetricsHelper.JobStatus.queued.rawValue),
+                    ("jobId", newJobId.description),
+                ]).increment()
+                
                 JobMetricsHelper.updateMetrics(for: job.name, startTime: startTime, retrying: true)
                 logger.debug("Retrying Job", metadata: [
                     "attempts": .stringConvertible(attempts),

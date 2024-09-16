@@ -52,7 +52,7 @@ public struct JobQueue<Queue: JobQueueDriver>: Service {
         let id = try await self.queue.push(buffer, options: options)
         Meter(label: JobMetricsHelper.meterLabel, dimensions: [
             ("status", JobMetricsHelper.JobStatus.queued.rawValue),
-            ("name", jobName),
+            ("jobID", id.description),
         ]).increment()
         self.logger.debug(
             "Pushed Job",

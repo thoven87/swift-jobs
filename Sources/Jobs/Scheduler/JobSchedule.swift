@@ -138,7 +138,7 @@ public struct JobSchedule: MutableCollection, Sendable {
                     ]
                 )
                 let nextScheduledDate = job.element.nextScheduledDate
-                let timeInterval = nextScheduledDate.timeIntervalSince1970
+                let timeInterval = nextScheduledDate.timeIntervalSinceNow
                 do {
                     try await Task.sleep(until: .now + .seconds(timeInterval))
                     self.jobSchedule.updateNextScheduledDate(jobIndex: job.offset)

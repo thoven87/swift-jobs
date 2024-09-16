@@ -45,24 +45,11 @@ internal enum JobMetricsHelper {
         error: Error? = nil,
         retrying: Bool = false
     ) {
-        // We can decrement processing jobs here because this func called
-        // on complete, failed e.t.c
-        Meter(label: JobMetricsHelper.meterLabel, dimensions: [
-            ("status", JobMetricsHelper.JobStatus.processing.rawValue),
-            ("name", name),
-        ]).decrement()
-
         if retrying {
             Counter(
                 label: Self.metricsLabel,
                 dimensions: [("name", name), ("status", JobStatus.retried.rawValue)]
             ).increment()
-            // Guard against negative queue values, this is needed because we call
-            // the job queue directly in the retrying step
-            Meter(label: JobMetricsHelper.meterLabel, dimensions: [
-                ("status", JobMetricsHelper.JobStatus.queued.rawValue),
-                ("name", name),
-            ]).increment()
             return
         }
 
