@@ -14,7 +14,6 @@
 
 import Foundation
 import Logging
-import Metrics
 import ServiceLifecycle
 
 /// An array of Jobs with schedules detailing when they should be run
@@ -187,10 +186,6 @@ public struct JobSchedule: MutableCollection, Sendable {
                 do {
                     _ = try await job.job.push(to: self.jobQueue)
                     try await self.jobQueue.setMetadata(key: .jobScheduleLastDate, value: job.date)
-                    Meter(label: JobMetricsHelper.meterLabel, dimensions: [
-                        ("status", JobMetricsHelper.JobStatus.queued.rawValue),
-                        ("name", type(of: job.job).jobName),
-                    ]).increment()
                 } catch {
                     self.jobQueue.logger.debug("Failed: to schedule job")
                 }

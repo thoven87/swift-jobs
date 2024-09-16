@@ -39,6 +39,11 @@ extension JobQueue {
     ///   - options: JobOptions
     /// - Returns: Identifier of queued job
     @discardableResult public func push<Parameters: JobParameters>(_ parameters: Parameters, options: JobOptions = .init()) async throws -> Queue.JobID {
+        // Decrement the current job by 1
+        Meter(label: JobMetricsHelper.meterLabel, dimensions: [
+            ("status", JobMetricsHelper.JobStatus.queued.rawValue),
+            ("name", type(of: parameters).jobName),
+        ]).increment()
         return try await self.push(id: Parameters.jobID, parameters: parameters, options: options)
     }
 
